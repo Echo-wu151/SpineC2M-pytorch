@@ -15,7 +15,8 @@ print(' '.join(sys.argv))
 dataloader = data.create_dataloader(opt)
 
 # create trainer for our model
-trainer = Trainer(opt)
+trainer1 = Trainer(opt)
+trainer2 = Trainer(opt)
 
 # create tool for counting iterations
 iter_counter = IterationCounter(opt, len(dataloader))
@@ -29,16 +30,48 @@ for epoch in iter_counter.training_epochs():
 
         iter_counter.record_one_iteration()
 
-        data_i['label'], data_i['image'] = data_i['label'].squeeze(
-            1), data_i['image'].squeeze(1)
-
-        if i % opt.D_steps_per_G == 0:
-            if opt.use_vae: trainer.run_encoder_one_step(data_i)
-            trainer.run_generator_one_step(data_i)
-
-        # train discriminator
-        trainer.run_discriminator_one_step(data_i)
-
+        data_i['CT'], data_i['MR'] = data_i['CT'].squeeze(
+            1), data_i['MR'].squeeze(1)
+        
+        # train aligned G(generate MR)
+        trainer1.run_generator_one_step(data_i)
+        trainer1.run_discriminator_one_step(data_i)
+        data_i['synMR'] =  trainer1.get_latest_generated()
+        
+        # train aligned F(generate CT)
+        trainer2.run_generator_one_step(data_i)
+        trainer2.run_discriminator_one_step(data_i)
+        
+        data_i['synCT'] =  trainer2.get_latest_generated()
+        
+        # train aligned G(generate MR) cycle
+        trainer1.run_generator_one_step(data_i)
+        #trainer1.run_discriminator_one_step(data_i)
+        # train aligned F(generate CT) cycle
+        trainer2.run_generator_one_step(data_i)
+        #trainer2.run_discriminator_one_step(data_i)
+        
+        
+        disjoin(data_i)
+        
+        # train unaligned G(generate MR)
+        trainer1.run_generator_one_step(data_i)
+        trainer1.run_discriminator_one_step(data_i)
+        data_i['synMR'] =  trainer1.get_latest_generated()
+        
+        # train unaligned F(generate CT)
+        trainer2.run_generator_one_step(data_i)
+        trainer2.run_discriminator_one_step(data_i)
+        data_i['synCT'] =  trainer2.get_latest_generated()
+        
+        # train unaligned G(generate MR) cycle
+        trainer1.run_generator_one_step(data_i)
+        #trainer1.run_discriminator_one_step(data_i)
+        # train unaligned F(generate CT) cycle
+        trainer2.run_generator_one_step(data_i)
+        #trainer2.run_discriminator_one_step(data_i)
+        
+        
         # Visualizations
         if iter_counter.needs_printing():
             losses = trainer.get_latest_losses()

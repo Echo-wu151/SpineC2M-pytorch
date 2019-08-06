@@ -19,7 +19,7 @@ class Trainer():
                 self.model_on_one_gpu.create_optimizers(opt)
             self.old_lr = opt.lr
 
-    def run_generator_one_step(self, data):
+    def run_generator_one_step(self, data, is_align = True, is_cycle = True):
         self.optimizer_G.zero_grad()
         g_losses, generated = self.model(data, mode='generator')
         g_loss = sum(g_losses.values()).mean()
@@ -28,7 +28,7 @@ class Trainer():
         self.g_losses = g_losses
         self.generated = generated
 
-    def run_discriminator_one_step(self, data):
+    def run_discriminator_one_step(self, data, is_align = True, is_cycle = True):
         self.optimizer_D.zero_grad()
         d_losses = self.model(data, mode='discriminator')
         d_loss = sum(d_losses.values()).mean()

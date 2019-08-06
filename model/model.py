@@ -27,18 +27,12 @@ class Model(torch.nn.Module):
             self.criterionFeat = torch.nn.L1Loss()
             if not opt.no_vgg_loss:
                 self.criterionVGG = networks.VGGLoss(self.opt.gpu_ids)
-            if opt.use_vae:
-                self.KLDLoss = networks.KLDLoss()
             if opt.plus_L1_loss:
                 self.criterionL1 = torch.nn.L1Loss()
             if opt.plus_L2_loss:
                 self.criterionL2 = torch.nn.MSELoss()
             if opt.plus_MI_loss:
                 self.criterionMI = networks.MILoss()
-            if opt.plus_BCE_loss:
-                self.criterionBCE = torch.nn.BCELoss()
-            if opt.plus_TV_loss:
-                self.criterionTV = networks.TVLoss()
             self.beta = torch.distributions.beta.Beta(0.5, 0.5)
 
         self.count = 0.
@@ -49,7 +43,7 @@ class Model(torch.nn.Module):
     # routines based on |mode|.
     def forward(self, data, mode):
 
-        input_semantics, real_image = self.preprocess_input(data)
+        input_semantics, real_image = data['CT'], data['MR']
 
         if mode == 'generator':
             g_loss, generated = self.compute_generator_loss(
@@ -72,7 +66,6 @@ class Model(torch.nn.Module):
     def create_optimizers(self, opt):
 
         G_params = list(self.netG.parameters())
-        E_params = list(self.netE.parameters()) if opt.use_vae else None
         D_params = list(self.netD.parameters()) if opt.isTrain else None
 
         if opt.no_TTUR:
@@ -107,39 +100,6 @@ class Model(torch.nn.Module):
 
         return netG, netD
 
-    # preprocess the input, such as moving the tensors to GPUs and
-    # transforming the label map to one-hot encoding
-    # |data|: dictionary of the input data
-
-    def preprocess_input(self, data):
-
-        if self.use_gpu():
-            keys = ("image", "label", "instance")
-            for k, d in data.items():
-                if k in keys:
-                    data[k] = d.cuda()
-
-        if not self.opt.no_label:
-            # move to GPU and change data types
-            data['label'] = data['label'].long()
-            # create one-hot label map
-            label_map = data['label']
-            bs, _, h, w = label_map.size()
-            nc = self.opt.label_nc + 1 if self.opt.contain_dontcare_label \
-                else self.opt.label_nc
-            input_label = self.FloatTensor(bs, nc, h, w).zero_()
-            input_semantics = input_label.scatter_(1, label_map, 1.0)
-        else:
-            input_semantics = data['label']
-
-        # concatenate instance map if it exists
-        if not self.opt.no_instance:
-            inst_map = data['instance']
-            instance_edge_map = self.get_edges(inst_map)
-            input_semantics = torch.cat(
-                (input_semantics, instance_edge_map), dim=1)
-
-        return input_semantics, data['image']
 
     def compute_generator_loss(self, input_semantics, real_image):
         # for_D : criterion for discriminator

@@ -3,7 +3,7 @@ import sys
 import cv2
 import numpy as np
 
-import utils as utils
+import util.metrics as utils
 
 
 def main(gt, methods, display_names):

@@ -233,3 +233,15 @@ def load_network(net, label, epoch, opt):
     net.load_state_dict(weights)
     return net
 
+import numpy as np
+import torch
+
+
+def disjoin(input, target, opt):
+        size = input.size()
+        rand_index = torch.randperm(size[0]).cuda()
+
+            input[:] = input[rand_index]
+
+    return input, target
+
