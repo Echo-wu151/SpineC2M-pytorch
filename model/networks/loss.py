@@ -6,8 +6,6 @@ from models.networks.vgg import VGG19
 import numpy as np
 
 
-
-
 class GANLoss(nn.Module):
     def __init__(self, gan_mode, tensor=torch.Tensor, opt=None):
         super(GANLoss, self).__init__()
@@ -90,32 +88,28 @@ class GANLoss(nn.Module):
                 loss += new_loss
             return loss / len(tensorlist)
         return self.loss(tensorlist, target_is_real, for_D)
-
     
     
-    
-def calc_gradient_penalty(netD, real_data, fake_data):
-    alpha = torch.rand(BATCH_SIZE, 1)
-    alpha = alpha.expand(real_data.size())
-    alpha = alpha.cuda() if use_cuda else alpha
+    def calc_gradient_penalty(self, netD, real_data, fake_data):
+        alpha = torch.rand(BATCH_SIZE, 1)
+        alpha = alpha.expand(real_data.size())
+        alpha = alpha.cuda() if use_cuda else alpha
 
-    interpolates = alpha * real_data + ((1 - alpha) * fake_data)
+        interpolates = alpha * real_data + ((1 - alpha) * fake_data)
 
-    if use_cuda:
-        interpolates = interpolates.cuda()
-    interpolates = autograd.Variable(interpolates, requires_grad=True)
+        if use_cuda:
+            interpolates = interpolates.cuda()
+        interpolates = autograd.Variable(interpolates, requires_grad=True)
 
-    disc_interpolates = netD(interpolates)
+        disc_interpolates = netD(interpolates)
 
-    gradients = autograd.grad(outputs=disc_interpolates, inputs=interpolates,
-                              grad_outputs=torch.ones(disc_interpolates.size()).cuda() if use_cuda else torch.ones(
-                                  disc_interpolates.size()),
-                              create_graph=True, retain_graph=True, only_inputs=True)[0]
+        gradients = autograd.grad(outputs=disc_interpolates, inputs=interpolates,
+                                  grad_outputs=torch.ones(disc_interpolates.size()).cuda() if use_cuda else torch.ones(
+                                      disc_interpolates.size()),
+                                  create_graph=True, retain_graph=True, only_inputs=True)[0]
 
-    gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * LAMBDA
-    return gradient_penalty
-
-
+        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * LAMBDA
+        return gradient_penalty
 
 
 
@@ -150,111 +144,26 @@ class VGGLoss(nn.Module):
         G = torch.mm(feats, feats.t()) 
 
         return G.div(a * b * c * d)
-    
-class VGG19(torch.nn.Module):
-    def __init__(self, requires_grad=False):
-        super().__init__()
-        vgg_pretrained_features = torchvision.models.vgg19(
-            pretrained=True).features
-        self.slice1 = torch.nn.Sequential()
-        self.slice2 = torch.nn.Sequential()
-        self.slice3 = torch.nn.Sequential()
-        self.slice4 = torch.nn.Sequential()
-        self.slice5 = torch.nn.Sequential()
-        for x in range(2):
-            self.slice1.add_module(str(x), vgg_pretrained_features[x])
-        for x in range(2, 7):
-            self.slice2add_module(str(x), vgg_pretrained_features[x])
-        for x in range(7, 12):
-            self.slice3.add_module(str(x), vgg_pretrained_features[x])
-        for x in range(12, 21):
-            self.slice4.add_module(str(x), vgg_pretrained_features[x])
-        for x in range(21, 30):
-            self.slice5.add_module(str(x), vgg_pretrained_features[x])
-        if not requires_grad:
-            for param in self.parameters():
-                param.requires_grad = False
-
-    def forward(self, X):
-        h_relu1 = self.slice1(X)
-        h_relu2 = self.slice2(h_relu1)
-        h_relu3 = self.slice3(h_relu2)
-        h_relu4 = self.slice4(h_relu3)
-        h_relu5 = self.slice5(h_relu4)
-        out = [h_relu1, h_relu2, h_relu3, h_relu4, h_relu5]
-        return out
-    
-class KLDLoss(nn.Module):
-    """
-    KL Divergence loss used in VAE with an image encoder
-    """
-
-    def forward(self, mu, logvar):
-        size = mu.size()
-        mu = mu.view(size[0], -1)
-        logvar = logvar.view(size[0], -1)
-
-        return -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()).sum()
-
-    
-from numpy import flip
-import numpy as np
-from scipy.signal import convolve2d, correlate2d
-from torch.nn.modules.module import Module
-from torch.nn.parameter import Parameter
 
 
-class MIFunction(Function):
-    @staticmethod
-    def forward(ctx, x, y):
-        # detach so we can cast to NumPy
-        x, y = x.detach(), y.detach() 
-        histx = ndimage.measurements.historgram(x.numpy(), -1, 1, 1000)
-        histy = ndimage.measurements.historgram(y.numpy(), -1, 1, 1000)
-        result = histx - histy
-        ctx.save_for_backward(x, y)
-        return torch.as_tensor(result, dtype=x.dtype)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        grad_output = grad_output.detach()
-        x, y = ctx.saved_tensors
-        grad_output = grad_output.numpy()
-        x = grad_output + y
-        y = grad_output + y
-
-        return torch.from_numpy(x),torch.from_numpy(y)
-
-
-class ScipyConv2d(Module):
-    def __init__(self, filter_width, filter_height):
-        super(ScipyConv2d, self).__init__()
-        self.filter = Parameter(torch.randn(filter_width, filter_height))
-        self.bias = Parameter(torch.randn(1, 1))
-
-    def forward(self, input):
-        return ScipyConv2dFunction.apply(input, self.filter, self.bias)
-    
 class MILoss(nn.Module):
-    """
-    Mutual information loss used
-    when paired images(ce-nce) is not alligned
-    """
     def __init__(self):
         super().__init__()
-        self.gaugram = GaussianHistogram(bins=250, min=-1,max=1,sigma=1)
+        self.gaugram = GaussianHistogram(bins=1500, min=-1,max=1,sigma=1)
     def forward(self, x, y):
         assert x.size() == y.size(), "input x and y should be same dim"
         bsize = x.size(0)
         pxy = []
         for i in range(bsize):
-            xi=x[i]
-            yi=y[i]
-            gaugram = self.gaugram(xi.view(-1))[:, None].float().mm(self.gaugram(yi.view(-1))[None, :].float())
+            xi = x[i]
+            yi = y[i]
+            xi = self.gaugram(xi.view(-1))[:, None].float()
+            yi = self.gaugram(yi.view(-1))[None, :].float()
+            gaugram = torch.mm(xi, yi)
             pxy.append(gaugram / gaugram.sum())
         pxy = torch.stack(pxy, dim=0)
-        joint_hgram = -pxy * (pxy + 1e-8).log()
-        return MIFunction.apply(x, y)
+        joint_hgram = -pxy * (pxy + 1e-6).log()
+        return joint_hgram
     
 class GaussianHistogram(nn.Module):
     def __init__(self, bins, min, max, sigma):
@@ -272,20 +181,4 @@ class GaussianHistogram(nn.Module):
         x = x.sum(dim=1)
         return x
 
-    
-class TVLoss(nn.Module):
-    """
-    Compute total variation loss.
-    Inputs:
-    - img: PyTorch Variable of shape (B, 3, H, W) holding an input image.
-    """
-    def __init__(self):
-        super().__init__()
-        self.criterion = nn.L1Loss()
-    def forward(self, img):
-
-        w_variance = self.criterion(img[:,:,:,:-1], img[:,:,:,1:])
-        h_variance = self.criterion(img[:,:,:-1,:], img[:,:,1:,:])
-        loss = (h_variance + w_variance)
-        return loss
     

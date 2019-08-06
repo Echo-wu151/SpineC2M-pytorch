@@ -4,9 +4,6 @@ import torch.nn.functional as F
 from models.networks.base_network import BaseNetwork
 from models.networks.normalization import get_nonspade_norm_layer
 import util.util as util
-import torch
-from models.networks.architecture import *
-import torch.nn.utils.spectral_norm as spectral_norm
 
 
 class MultiscaleDiscriminator(BaseNetwork):
@@ -14,19 +11,21 @@ class MultiscaleDiscriminator(BaseNetwork):
     def modify_commandline_options(parser, is_train):
         parser.add_argument('--netD_subarch', type=str, default='n_layer',
                             help='architecture of each discriminator')
-        parser.add_argument('--num_D', type=int, default=1,
+        parser.add_argument('--num_D', type=int, default=2,
                             help='number of discriminators to be used in multiscale')
         opt, _ = parser.parse_known_args()
-        # define properties of each discriminator of the multiscale
-        # discriminator
+
+        # define properties of each discriminator of the multiscale discriminator
         subnetD = util.find_class_in_module(opt.netD_subarch + 'discriminator',
                                             'models.networks.discriminator')
         subnetD.modify_commandline_options(parser, is_train)
+
         return parser
 
     def __init__(self, opt):
         super().__init__()
         self.opt = opt
+
         for i in range(opt.num_D):
             subnetD = self.create_single_discriminator(opt)
             self.add_module('discriminator_%d' % i, subnetD)
@@ -35,12 +34,8 @@ class MultiscaleDiscriminator(BaseNetwork):
         subarch = opt.netD_subarch
         if subarch == 'n_layer':
             netD = NLayerDiscriminator(opt)
-        elif subarch == 'sn_patch':
-            netD = SNPatchDiscriminator(opt)
         else:
-            raise ValueError(
-                'unrecognized discriminator subarchitecture %s' %
-                subarch)
+            raise ValueError('unrecognized discriminator subarchitecture %s' % subarch)
         return netD
 
     def downsample(self, input):
@@ -48,32 +43,20 @@ class MultiscaleDiscriminator(BaseNetwork):
                             stride=2, padding=[1, 1],
                             count_include_pad=False)
 
-    def rot90(self, input):
-        ranseed = torch.randint(1, 4, (1,)).item()
-        input = input.rot90(ranseed, [1, 2])
-        return input
-
     # Returns list of lists of discriminator outputs.
     # The final result is of size opt.num_D x opt.n_layers_D
     def forward(self, input):
         result = []
         get_intermediate_features = not self.opt.no_ganFeat_loss
-
         for name, D in self.named_children():
-
-            if True:
-                out = D(input)
-                input = self.downsample(input)
-
-            if False:
-                out = D(input)
-                input = self.rot90(input)
-
+            out = D(input)
             if not get_intermediate_features:
                 out = [out]
             result.append(out)
+            input = self.downsample(input)
 
         return result
+
 
 # Defines the PatchGAN discriminator with the specified arguments.
 class NLayerDiscriminator(BaseNetwork):
@@ -108,58 +91,6 @@ class NLayerDiscriminator(BaseNetwork):
         sequence += [[nn.Conv2d(nf, 1, kernel_size=kw, stride=1, padding=padw)]]
 
         # We divide the layers into groups to extract intermediate layer outputs
-        for n in range(len(sequence)):
-            self.add_module('model' + str(n), nn.Sequential(*sequence[n]))
-
-    def compute_D_input_nc(self, opt):
-        input_nc = opt.label_nc + opt.output_nc
-        if opt.contain_dontcare_label:
-            input_nc += 1
-        if not opt.no_instance:
-            input_nc += 1
-        return input_nc
-
-    def forward(self, input):
-        results = [input]
-        for submodel in self.children():
-            intermediate_output = submodel(results[-1])
-            results.append(intermediate_output)
-
-        get_intermediate_features = not self.opt.no_ganFeat_loss
-        if get_intermediate_features:
-            return results[1:]
-        else:
-            return results[-1]
-
-# Defines the PatchGAN discriminator with the specified arguments.
-class SNPatchDiscriminator(BaseNetwork):
-    @staticmethod
-    def modify_commandline_options(parser, is_train):
-        parser.add_argument('--n_layers_D', type=int, default=5,
-                            help='# layers in each discriminator')
-        return parser
-
-    def __init__(self, opt):
-        super().__init__()
-        self.opt = opt
-
-        kw = 5
-        padw = int(np.ceil((kw - 1.0) / 2))
-        nf = opt.ndf
-        input_nc = self.compute_D_input_nc(opt)
-
-        sequence = [[spectral_norm(nn.Conv2d(input_nc, nf, kw, stride=2, padding=padw)),
-                     nn.LeakyReLU(0.2, True)]]
-
-        for n in range(1, opt.n_layers_D):
-            nf_prev = nf
-            nf = min(nf * 2, 256)
-
-            sequence += [[spectral_norm(nn.Conv2d(nf_prev, nf, kw, stride=2, padding=padw)),
-                          nn.LeakyReLU(0.2, True)]]
-
-        # We divide the layers into groups to extract intermediate layer
-        # outputs
         for n in range(len(sequence)):
             self.add_module('model' + str(n), nn.Sequential(*sequence[n]))
 

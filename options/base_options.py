@@ -48,11 +48,6 @@ class BaseOptions():
             default='spectralsync_batch',
             help='instance or batch norm')
         parser.add_argument(
-            '--norm_E',
-            type=str,
-            default='spectralsync_batch',
-            help='instance or batch norms')
-        parser.add_argument(
             '--phase',
             type=str,
             default='train',
@@ -84,11 +79,7 @@ class BaseOptions():
             type=int,
             default=256,
             help='Crop to the width of crop_size (after initially scaling the images to load_size.)')
-        parser.add_argument(
-            '--aspect_ratio',
-            type=float,
-            default=1.0,
-            help='The ratio width/height. The final height of the load image will be crop_size/aspect_ratio')
+
         parser.add_argument(
             '--label_nc',
             type=int,
@@ -208,23 +199,7 @@ class BaseOptions():
             '--no_label',
             action='store_true',
             help='if specified, do *not* use input images as label')
-        parser.add_argument(
-            '--nef',
-            type=int,
-            default=8,
-            help='# of encoder filters in the first conv layer')
-        parser.add_argument(
-            '--use_vae',
-            action='store_true',
-            help='enable training with an image encoder.')
-        parser.add_argument(
-            '--use_neck',
-            action='store_true',
-            help='enable training with an image encoder.')
-        parser.add_argument(
-            '--use_noise',
-            action='store_true',
-            help='enable training with an image encoder.')
+        
         self.initialized = True
         return parser
 
