@@ -113,3 +113,80 @@ class NLayerDiscriminator(BaseNetwork):
             return results[1:]
         else:
             return results[-1]
+
+class Discriminator(BaseNetwork):
+    @staticmethod
+    def modify_commandline_options(parser, is_train):
+        parser.add_argument('--n_layers_D', type=int, default=4,
+                            help='# layers in each discriminator')
+        return parser
+
+    def __init__(self, opt):
+        super().__init__()
+        self.opt = opt
+
+        kw = 4
+        padw = int(np.ceil((kw - 1.0) / 2))
+        nf = opt.ndf
+
+        self.head_f = nn.Sequential([Block(2, nf, kernel_size=kw, stride=2, padding=padw,norm=False)])
+        self.head_b = nn.Sequential([Block(1, nf, kernel_size=kw, stride=2, padding=padw,norm=False)])
+        
+        self.body = nn.ModuleList([Block(nf * 2 ** i, nf * 2 ** (i+1), kernel_size=kw, stride=2, padding=padw)
+                    for i in range(4)])
+        
+        self.tail_f = nn.Sequential([Block(nf * 8, 1, kernel_size=kw, stride=1, padding=padw,norm=False,activation=False)])
+        self.tail_b = nn.Sequential([Block(nf * 8, 1, kernel_size=kw, stride=1, padding=padw,norm=False,activation=False)])
+
+
+    def forward(self, input,is_forward=True):
+        results = [input]
+                                     
+        if is_forward:
+            x = self.head_f(input)
+        else:
+            x = self.head_b(input)
+        results.append(x)
+        
+        for layer in self.body:
+            x = layer(x)
+            results.append(x)
+                                                 
+        if is_forward:
+            x = self.tail_f(x)
+        else:
+            x = self.tail_b(x)
+        results.append(x)
+                                     
+        get_intermediate_features = not self.opt.no_ganFeat_loss
+                                     
+        if get_intermediate_features:
+            return results[1:]
+        else:
+            return results[-1]
+                                   
+class Block(nn.Module):
+    def __init__(self, fin, fout, norm=nn.InstanceNorm2d,
+                 activation=nn.LeakyReLU(inplace=True), 
+                 conv=spectral_norm(nn.Conv2d),kernel_size=4, 
+                 stride=2, dilation=1, groups=1, bias=True,
+                 padding_mode=False):
+        super().__init__()
+        pw = (kernel_size - 1) // 2
+        if not activation: activation = nn.Identity()
+        if not norm: norm = nn.Identity
+        if not layer: layer = nn.Identity
+        if not padding_mode: padding_mode = nn.ZeroPad2d
+        
+        
+        self.conv_block = nn.Sequential(
+            padding_mode(pw)
+            conv(fin, fout, kernel_size=kernel_size, padding=0,
+                      stride=stride, dilation=dilation, 
+                      groups=groups, bias=bias),
+            norm(fout),
+            activation
+        )
+
+    def forward(self, x, *args):
+        return self.conv_block(x)
