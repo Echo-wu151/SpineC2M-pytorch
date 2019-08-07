@@ -15,25 +15,43 @@ class Trainer():
 
         self.generated = None
         if opt.isTrain:
-            self.optimizer_G, self.optimizer_D = \
+            self.optimizer_G1, self.optimizer_D1,self.optimizer_G2, self.optimizer_D2 = \
                 self.model_on_one_gpu.create_optimizers(opt)
             self.old_lr = opt.lr
 
-    def run_generator_one_step(self, data, is_align = True, is_cycle = True):
-        self.optimizer_G.zero_grad()
-        g_losses, generated = self.model(data, mode='generator')
-        g_loss = sum(g_losses.values()).mean()
-        g_loss.backward()
-        self.optimizer_G.step()
-        self.g_losses = g_losses
-        self.generated = generated
+    def run_generator_one_step(self, data, is_cycle = True,is_forward=True):
+        
+        if is_forward:
+            self.optimizer_G1.zero_grad()
+            g_losses, generated = self.model(data, mode='generator_f')
+            g_loss = sum(g_losses.values()).mean()
+            g_loss.backward()
+            self.optimizer_G1.step()
+        else:
+            self.optimizer_G2.zero_grad()
+            g_losses, generated = self.model(data, mode='generator_b')
+            g_loss = sum(g_losses.values()).mean()
+            g_loss.backward()
+            self.optimizer_G2.step()
+        if is_cycle:
+            self.g_losses = g_losses
+            self.generated = generated
+            
 
-    def run_discriminator_one_step(self, data, is_align = True, is_cycle = True):
-        self.optimizer_D.zero_grad()
-        d_losses = self.model(data, mode='discriminator')
-        d_loss = sum(d_losses.values()).mean()
-        d_loss.backward()
-        self.optimizer_D.step()
+
+    def run_discriminator_one_step(self, data,is_forward=True):
+        if is_forward:
+            self.optimizer_D1.zero_grad()
+            d_losses = self.model(data, mode='discriminator_f')
+            d_loss = sum(d_losses.values()).mean()
+            d_loss.backward()
+            self.optimizer_D1.step()
+        else:
+            self.optimizer_D2.zero_grad()
+            d_losses = self.model(data, mode='discriminator_b')
+            d_loss = sum(d_losses.values()).mean()
+            d_loss.backward()
+            self.optimizer_D2.step()
         self.d_losses = d_losses
 
     def get_latest_losses(self):
@@ -67,9 +85,13 @@ class Trainer():
                 new_lr_G = new_lr / 2
                 new_lr_D = new_lr * 2
 
-            for param_group in self.optimizer_D.param_groups:
+            for param_group in self.optimizer_D1.param_groups:
                 param_group['lr'] = new_lr_D
-            for param_group in self.optimizer_G.param_groups:
+            for param_group in self.optimizer_G1.param_groups:
+                param_group['lr'] = new_lr_G
+            for param_group in self.optimizer_D2.param_groups:
+                param_group['lr'] = new_lr_D
+            for param_group in self.optimizer_G2.param_groups:
                 param_group['lr'] = new_lr_G
             print('update learning rate: %f -> %f' % (self.old_lr, new_lr))
             self.old_lr = new_lr

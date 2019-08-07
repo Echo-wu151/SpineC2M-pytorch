@@ -33,43 +33,29 @@ for epoch in iter_counter.training_epochs():
         data_i['CT'], data_i['MR'] = data_i['CT'].squeeze(
             1), data_i['MR'].squeeze(1)
         
-        # train aligned G(generate MR)
-        trainer1.run_generator_one_step(data_i)
-        trainer1.run_discriminator_one_step(data_i)
-        data_i['synMR'] =  trainer1.get_latest_generated()
+        #aligned
+        # train  F (MR to synCT)
+        trainer.run_generator_one_step(data_i)
+        data_i['synCT'] =  trainer.get_latest_generated()
+        # train Df
+        trainer.run_discriminator_one_step(data_i)
+        # train  G (synCT to synMR) for cycle
+        trainer.run_generator_one_step(data_i, is_cylce = True) 
+        data_i['cylceMR'] =  trainer.get_latest_generated()
         
-        # train aligned F(generate CT)
-        trainer2.run_generator_one_step(data_i)
-        trainer2.run_discriminator_one_step(data_i)
-        
-        data_i['synCT'] =  trainer2.get_latest_generated()
-        
-        # train aligned G(generate MR) cycle
-        trainer1.run_generator_one_step(data_i)
-        #trainer1.run_discriminator_one_step(data_i)
-        # train aligned F(generate CT) cycle
-        trainer2.run_generator_one_step(data_i)
-        #trainer2.run_discriminator_one_step(data_i)
-        
-        
+
         disjoin(data_i)
         
-        # train unaligned G(generate MR)
-        trainer1.run_generator_one_step(data_i)
-        trainer1.run_discriminator_one_step(data_i)
-        data_i['synMR'] =  trainer1.get_latest_generated()
-        
-        # train unaligned F(generate CT)
-        trainer2.run_generator_one_step(data_i)
-        trainer2.run_discriminator_one_step(data_i)
-        data_i['synCT'] =  trainer2.get_latest_generated()
-        
-        # train unaligned G(generate MR) cycle
-        trainer1.run_generator_one_step(data_i)
-        #trainer1.run_discriminator_one_step(data_i)
-        # train unaligned F(generate CT) cycle
-        trainer2.run_generator_one_step(data_i)
-        #trainer2.run_discriminator_one_step(data_i)
+        #unaligned
+        # train  G (CT to synMR)
+        trainer.run_generator_one_step(data_i, is_forward=False)
+        data_i['synMR'] =  trainer.get_latest_generated()
+        # train Dg
+        trainer.run_discriminator_one_step(data_i, is_forward=False)
+        # train  F (synMR to synCT) for cycle
+        trainer.run_generator_one_step(data_i, is_forward=False, is_cylce = True) 
+        data_i['cylceCT'] =  trainer.get_latest_generated()
+
         
         
         # Visualizations

@@ -146,7 +146,7 @@ class VGGLoss(nn.Module):
         return G.div(a * b * c * d)
 
 
-class MILoss(nn.Module):
+class HistogramLoss(nn.Module):
     def __init__(self):
         super().__init__()
         self.gaugram = GaussianHistogram(bins=1500, min=-1,max=1,sigma=1)
@@ -162,7 +162,7 @@ class MILoss(nn.Module):
             gaugram = torch.mm(xi, yi)
             pxy.append(gaugram / gaugram.sum())
         pxy = torch.stack(pxy, dim=0)
-        joint_hgram = -pxy * (pxy + 1e-6).log()
+        joint_hgram = pxy
         return joint_hgram
     
 class GaussianHistogram(nn.Module):
@@ -180,5 +180,11 @@ class GaussianHistogram(nn.Module):
         x = torch.exp(-0.5*(x/self.sigma)**2) / (self.sigma * np.sqrt(np.pi*2)) * self.delta
         x = x.sum(dim=1)
         return x
-
     
+class GradientDifferenceLoss(nn.Module):
+    def forward(self, preds, target):
+        pdx, pdy = preds[:, :, 1:, :] - preds[:, :, :-1, :], preds[:, :, :, 1:] - preds[:, :, :, :-1]
+        tdx, tdy = target[:, :, 1:, :] - target[:, :, :-1, :], target[:, :, :, 1:] - target[:, :, :, :-1]
+        
+        GD = torch.stack([(tdx-pdx).abs(), (tdy-pdy).abs()])
+        return GD.mean()

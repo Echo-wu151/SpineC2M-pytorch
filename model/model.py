@@ -18,7 +18,7 @@ class Model(torch.nn.Module):
         self.ByteTensor = torch.cuda.ByteTensor if self.use_gpu() \
             else torch.ByteTensor
 
-        self.netG, self.netD, self.netE = self.initialize_networks(opt)
+        self.netG1, self.netD1, self.netG2, self.netD2 = self.initialize_networks(opt)
 
         # set loss functions
         if opt.isTrain:
@@ -27,13 +27,10 @@ class Model(torch.nn.Module):
             self.criterionFeat = torch.nn.L1Loss()
             if not opt.no_vgg_loss:
                 self.criterionVGG = networks.VGGLoss(self.opt.gpu_ids)
-            if opt.plus_L1_loss:
+            if not opt.no_L1_loss:
                 self.criterionL1 = torch.nn.L1Loss()
-            if opt.plus_L2_loss:
-                self.criterionL2 = torch.nn.MSELoss()
-            if opt.plus_MI_loss:
-                self.criterionMI = networks.MILoss()
-            self.beta = torch.distributions.beta.Beta(0.5, 0.5)
+            if not opt.no_Histogram_loss:
+                self.criterionMI = networks.HistogramLoss()
 
         self.count = 0.
         self.eps = 0.
@@ -45,19 +42,29 @@ class Model(torch.nn.Module):
 
         input_semantics, real_image = data['CT'], data['MR']
 
-        if mode == 'generator':
+        if mode == 'generator_f':
             g_loss, generated = self.compute_generator_loss(
-                input_semantics, real_image)
+                input_semantics, real_image, is_forward=True)
             return g_loss, generated
 
-        elif mode == 'discriminator':
+        elif mode == 'discriminator_f':
             d_loss = self.compute_discriminator_loss(
-                input_semantics, real_image)
+                input_semantics, real_image, is_forward=True)
+            return d_loss
+        
+        elif mode == 'generator_b':
+            g_loss, generated = self.compute_generator_loss(
+                input_semantics, real_image, is_forward=False)
+            return g_loss, generated
+
+        elif mode == 'discriminator_b':
+            d_loss = self.compute_discriminator_loss(
+                input_semantics, real_image, is_forward=False)
             return d_loss
 
         elif mode == 'inference':
             with torch.no_grad():
-                fake_image, _ = self.generate_fake(input_semantics, real_image)
+                fake_image, _ = self.generate1_fake(input_semantics, real_image)
             return fake_image
 
         else:
@@ -65,90 +72,87 @@ class Model(torch.nn.Module):
 
     def create_optimizers(self, opt):
 
-        G_params = list(self.netG.parameters())
-        D_params = list(self.netD.parameters()) if opt.isTrain else None
-
+        G1_params = list(self.netG1.parameters())
+        D1_params = list(self.netD1.parameters()) if opt.isTrain else None
+        
+        beta1, beta2 = opt.beta1, opt.beta2
         if opt.no_TTUR:
-            beta1, beta2 = opt.beta1, opt.beta2
             G_lr, D_lr = opt.lr, opt.lr
         else:
-            beta1, beta2 = 0, 0.9
             G_lr, D_lr = opt.lr / 2, opt.lr * 2
 
-        optimizer_G = torch.optim.Adam(G_params, lr=G_lr, betas=(beta1, beta2))
-        optimizer_D = torch.optim.Adam(D_params, lr=D_lr, betas=(beta1, beta2)) if opt.isTrain else None
+        optimizer_G1 = torch.optim.Adam(G1_params, lr=G_lr, betas=(beta1, beta2))
+        optimizer_D1 = torch.optim.Adam(D1_params, lr=D_lr, betas=(beta1, beta2)) if opt.isTrain else None
+        
+        G2_params = list(self.netG2.parameters())
+        D2_params = list(self.netD2.parameters()) if opt.isTrain else None
+        
+        optimizer_G2 = torch.optim.Adam(G2_params, lr=G_lr, betas=(beta1, beta2))
+        optimizer_D2 = torch.optim.Adam(D2_params, lr=D_lr, betas=(beta1, beta2)) if opt.isTrain else None
 
-        return optimizer_G, optimizer_D
+        return optimizer_G1, optimizer_D1, optimizer_G2, optimizer_D2
 
     
     def save(self, epoch):
-        util.save_network(self.netG, 'G', epoch, self.opt)
-        util.save_network(self.netD, 'D', epoch, self.opt)
+        util.save_network(self.netG1 'G1', epoch, self.opt)
+        util.save_network(self.netD1, 'D1', epoch, self.opt)
+        util.save_network(self.netG2, 'G2', epoch, self.opt)
+        util.save_network(self.netD2, 'D2', epoch, self.opt)
 
     ##########################################################################
     # Private helper methods
     ##########################################################################
 
     def initialize_networks(self, opt):
-        netG = networks.define_G(opt)
-        netD = networks.define_D(opt) if opt.isTrain else None
-
+        netG1 = networks.define_G(opt)
+        netD1 = networks.define_D(opt) if opt.isTrain else None
+        netG2 = networks.define_G(opt)
+        netD2 = networks.define_D(opt) if opt.isTrain else None
         if not opt.isTrain or opt.continue_train:
-            netG = util.load_network(netG, 'G', opt.which_epoch, opt)
+            netG1 = util.load_network(netG1, 'G1', opt.which_epoch, opt)
+            netG2 = util.load_network(netG2, 'G2', opt.which_epoch, opt)
             if opt.isTrain:
-                netD = util.load_network(netD, 'D', opt.which_epoch, opt)
+                netD1 = util.load_network(netD1, 'D1', opt.which_epoch, opt)
+                netD2 = util.load_network(netD2, 'D2', opt.which_epoch, opt)
 
-        return netG, netD
+        return netG1, netD1, netG2, netD2
 
 
-    def compute_generator_loss(self, input_semantics, real_image):
+    def compute_generator_loss(self, input_semantics, real_image,is_forward=True):
         # for_D : criterion for discriminator
         G_losses = {}
-
-        fake_image, KLD_loss = self.generate_fake(
-            input_semantics, real_image)
-
-        pred_fake, pred_real = self.discriminate(
+        if is_forward:
+            fake_image = self.generate1_fake(
+                input_semantics, real_image)
+            pred_fake, pred_real = self.discriminate1(
+            input_semantics, fake_image, real_image)
+        else:
+            fake_image = self.generate2_fake(
+                input_semantics, real_image)
+            pred_fake, pred_real = self.discriminate2(
             input_semantics, fake_image, real_image)
 
         G_losses['GAN'] = self.criterionGAN(pred_fake, True,
                                             for_D=False) * self.opt.lambda_gan
-        lamb = self.beta.sample().item()
 
-        pred = [list(map(lambda x, y: x * lamb + y * (1 - lamb), r, f))
-                for r, f in zip(pred_real, pred_fake)]
-        G_losses['G_mix'] = self.criterionGAN(pred, True,
-                                              for_D=False) * self.opt.lambda_gan
         if not self.opt.no_ganFeat_loss:
-            num_D = len(pred_fake)
+
             GAN_Feat_loss = self.FloatTensor(1).fill_(0)
-            for i in range(num_D):  # for each discriminator
                 # last output is the final prediction, so we exclude it
-                num_intermediate_outputs = len(pred_fake[i]) - 1
-                for j in range(
-                        num_intermediate_outputs):  # for each layer output
-                    unweighted_loss = self.criterionFeat(
-                        pred_fake[i][j], pred_real[i][j].detach())
-                    GAN_Feat_loss += unweighted_loss * self.opt.lambda_feat / num_D
+                num_outputs = len(pred_fake[i]) - 1
+            for j in range(num_outputs):  # for each layer output
+                unweighted_loss = self.criterionFeat(
+                    pred_fake[i][j], pred_real[i][j].detach())
+                GAN_Feat_loss += unweighted_loss * self.opt.lambda_feat
             G_losses['GAN_Feat'] = GAN_Feat_loss
 
         if self.opt.plus_MI_loss:
             G_losses['MI'] = self.criterionMI(fake_image, real_image) \
                 * self.opt.lambda_MI
 
-        if self.opt.plus_BCE_loss:
-            G_losses['BCE'] = self.criterionBCE(fake_image.add(1).div(2), real_image.add(1).div(2)) \
-                * self.opt.lambda_BCE
-
         if self.opt.plus_L1_loss:
             G_losses['L1'] = self.criterionL1(fake_image, real_image) \
                 * self.opt.lambda_L1
-        if self.opt.plus_L2_loss:
-            G_losses['L2'] = self.criterionL2(fake_image, real_image) \
-                * self.opt.lambda_L2
-        if self.opt.plus_TV_loss:
-            G_losses['TV'] = self.criterionTV(fake_image) \
-            * self.opt.lambda_TV
 
         size = list(fake_image.size())
         if (int(size[1]) != 3) and (not self.opt.no_vgg_loss):
@@ -162,82 +166,63 @@ class Model(torch.nn.Module):
 
         return G_losses, fake_image
 
-    def compute_encoder_loss(self, input_semantics, real_image):
-        G_losses = {}
 
-        fake_image = self.generate_fake(
-            input_semantics, real_image,
-            is_backward_z=True)
-
-        if self.opt.plus_BCE_loss:
-            E_losses['BCE'] = self.criterionBCE(fake_image.add(1).div(2), real_image.add(1).div(2)) \
-                * self.opt.lambda_BCE
-
-        if self.opt.plus_L1_loss:
-            E_losses['L1'] = self.criterionL1(fake_image, real_image) \
-                * self.opt.lambda_L1
-        if self.opt.plus_L2_loss:
-            E_losses['L2'] = self.criterionL2(fake_image, real_image) \
-                * self.opt.lambda_L2
-
-        return E_losses
-
-    def compute_discriminator_loss(self, input_semantics, real_image):
+    def compute_discriminator_loss(self, input_semantics, real_image,is_forward):
         D_losses = {}
-        with torch.no_grad():
-            fake_image, _ = self.generate_fake(input_semantics, real_image)
-            fake_image = fake_image.detach()
-            fake_image.requires_grad_()
-
-        pred_fake, pred_real = self.discriminate(
-            input_semantics, fake_image, real_image)
+        if is_forward:
+            with torch.no_grad():
+                fake_image, _ = self.generate1_fake(input_semantics, real_image)
+                fake_image = fake_image.detach()
+                fake_image.requires_grad_()
+            pred_fake, pred_real = self.discriminate1(
+                input_semantics, fake_image, real_image)
+        else:
+            with torch.no_grad():
+                fake_image, _ = self.generate2_fake(input_semantics, real_image)
+                fake_image = fake_image.detach()
+                fake_image.requires_grad_()
+            pred_fake, pred_real = self.discriminate2(
+                input_semantics, fake_image, real_image)
 
         D_losses['D_Fake'] = self.criterionGAN(pred_fake, False,
                                                for_D=True) * self.opt.lambda_gan
         D_losses['D_real'] = self.criterionGAN(pred_real, True,
                                                for_D=True) * self.opt.lambda_gan
-        lamb = self.beta.sample()
-
-        pred = [list(map(lambda x, y: x * lamb + y * (1 - lamb), r, f))
-                for r, f in zip(pred_real, pred_fake)]
-
-        D_losses['D_mix'] = self.criterionGAN(pred, False,
-                                              for_D=True) * self.opt.lambda_gan
 
         return D_losses
 
-    def encode_z(self, real_image):
-
-        mu, logvar = self.netE(real_image)
-
-        z = self.reparameterize(mu, logvar)
-
-        return z, mu, logvar
-
-    def generate_fake(self, input_semantics, real_image,
-                      is_backward_z=False):
-
-        fake_image = self.netG(input_semantics)
-
+    
+    def generate1_fake(self, input_semantics, real_image):
+        fake_image = self.netG1(input_semantics)
         return fake_image
 
     # Given fake and real image, return the prediction of discriminator
     # for each fake and real image.
 
-    def discriminate(self, input_semantics, fake_image, real_image):
+    def discriminate1(self, input_semantics, fake_image, real_image):
         fake_concat = torch.cat([input_semantics, fake_image], dim=1)
         real_concat = torch.cat([input_semantics, real_image], dim=1)
 
-        # In Batch Normalization, the fake and real images are
-        # recommended to be in the same batch to avoid disparate
-        # statistics in fake and real images.
-        # So both fake and real images are fed to D all at once.
         fake_and_real = torch.cat([fake_concat, real_concat], dim=0)
-        discriminator_out = self.netD(fake_and_real)
+        discriminator_out = self.netD1(fake_and_real)
         pred_fake, pred_real = self.divide_pred(discriminator_out)
 
         return pred_fake, pred_real
 
+    def generate2_fake(self, input_semantics, real_image):
+        fake_image = self.netG2(input_semantics)
+        return fake_image
+
+    # Given fake and real image, return the prediction of discriminator
+    # for each fake and real image.
+
+    def discriminate2(self, input_semantics, fake_image, real_image):
+        fake_and_real = torch.cat([fake_image, real_image], dim=0)
+        discriminator_out = self.netD2(fake_and_real)
+        pred_fake, pred_real = self.divide_pred(discriminator_out)
+
+        return pred_fake, pred_real
+    
     # Take the prediction of fake and real images from the combined batch
     def divide_pred(self, pred):
         # the prediction contains the intermediate outputs of multiscale GAN,
@@ -253,13 +238,6 @@ class Model(torch.nn.Module):
             real = pred[pred.size(0) // 2:]
 
         return fake, real
-
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
-        if self.count % self.opt.z_duration == 0:
-            self.eps = torch.randn_like(std)
-        self.count += 1
-        return self.eps.mul(std) + mu
 
     def use_gpu(self):
         return len(self.opt.gpu_ids) > 0
