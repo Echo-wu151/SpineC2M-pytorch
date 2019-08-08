@@ -38,7 +38,7 @@ class IterationCounter():
         self.last_iter_time = time.time()
         self.current_epoch = epoch
 
-    def record_one_iteration(self):
+    def record_1_iter(self):
         current_time = time.time()
 
         # the last remaining batch is dropped (see data/__init__.py),

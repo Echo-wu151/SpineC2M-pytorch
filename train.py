@@ -26,37 +26,17 @@ visualizer = Visualizer(opt)
 
 for epoch in iter_counter.training_epochs():
     iter_counter.record_epoch_start(epoch)
-    for i, data_i in enumerate(dataloader, start=iter_counter.epoch_iter):
+    for i, data in enumerate(dataloader, start=iter_counter.epoch_iter):
 
-        iter_counter.record_one_iteration()
-
-        data_i['CT'], data_i['MR'] = data_i['CT'].squeeze(
-            1), data_i['MR'].squeeze(1)
+        iter_counter.record_one_iter()
+        trainer.g_losses, trainer.d_losser = {}, {}
+        CT, MR = data['CT'].squeeze(1), data['MR'].squeeze(1)
         
-        #aligned
-        # train  F (MR to synCT)
-        trainer.run_generator_one_step(data_i)
-        data_i['synCT'] =  trainer.get_latest_generated()
-        # train Df
-        trainer.run_discriminator_one_step(data_i)
-        # train  G (synCT to synMR) for cycle
-        trainer.run_generator_one_step(data_i, is_cylce = True) 
-        data_i['cylceMR'] =  trainer.get_latest_generated()
+        if opt.D_steps_per_G:
+            trainer.run_generator_one_step(CT, MR)
+        trainer.run_discriminator_one_step(CT, MR)
         
-
-        disjoin(data_i)
-        
-        #unaligned
-        # train  G (CT to synMR)
-        trainer.run_generator_one_step(data_i, is_forward=False)
-        data_i['synMR'] =  trainer.get_latest_generated()
-        # train Dg
-        trainer.run_discriminator_one_step(data_i, is_forward=False)
-        # train  F (synMR to synCT) for cycle
-        trainer.run_generator_one_step(data_i, is_forward=False, is_cylce = True) 
-        data_i['cylceCT'] =  trainer.get_latest_generated()
-
-        
+        data =  {**data, **trainer.get_latest_generated()}
         
         # Visualizations
         if iter_counter.needs_printing():
@@ -67,10 +47,7 @@ for epoch in iter_counter.training_epochs():
                 losses, iter_counter.total_steps_so_far)
 
         if iter_counter.needs_displaying():
-            visuals = OrderedDict([('input_label', data_i['label']),
-                                   ('synthesized_image',
-                                    trainer.get_latest_generated()),
-                                   ('real_image', data_i['image'])])
+            visuals = OrderedDict([**data])
             visualizer.display_current_results(
                 visuals, epoch, iter_counter.total_steps_so_far)
 
