@@ -35,7 +35,7 @@ class BaseOptions():
         parser.add_argument(
             '--model',
             type=str,
-            default='pix2pix',
+            default='m2c',
             help='which model to use')
         parser.add_argument(
             '--norm_G',
@@ -80,20 +80,6 @@ class BaseOptions():
             default=256,
             help='Crop to the width of crop_size (after initially scaling the images to load_size.)')
 
-        parser.add_argument(
-            '--label_nc',
-            type=int,
-            default=1,
-            help='# of input label classes without unknown class. If you have unknown class as class label, specify --contain_dopntcare_label.')
-        parser.add_argument(
-            '--contain_dontcare_label',
-            action='store_true',
-            help='if the label map contains dontcare label (dontcare=255)')
-        parser.add_argument(
-            '--output_nc',
-            type=int,
-            default=1,
-            help='# of output image channels')
 
         # for setting inputs
         parser.add_argument('--dataroot', type=str, default='../../data/')
@@ -164,8 +150,8 @@ class BaseOptions():
         parser.add_argument(
             '--netG',
             type=str,
-            default='spade',
-            help='selects model to use for netG (pix2pixhd | spade)')
+            default='pix2pixhd',
+            help='selects model to use for netG (pix2pixhd | )')
         parser.add_argument(
             '--ngf',
             type=int,
@@ -186,20 +172,7 @@ class BaseOptions():
             type=float,
             default=0.02,
             help='variance of the initialization distribution')
-        parser.add_argument('--z_dim', type=int, default=128,
-                            help="dimension of the latent z vector")
-        parser.add_argument('--z_duration', type=int, default=8,
-                            help="fix noise(epsilon) of the latent z vector during z_duration iterations")
-        # for instance-wise features
-        parser.add_argument(
-            '--no_instance',
-            action='store_true',
-            help='if specified, do *not* add instance map as input')
-        parser.add_argument(
-            '--no_label',
-            action='store_true',
-            help='if specified, do *not* use input images as label')
-        
+
         self.initialized = True
         return parser
 

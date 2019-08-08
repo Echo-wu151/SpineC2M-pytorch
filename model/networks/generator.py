@@ -14,7 +14,7 @@ class Pix2PixHDGenerator(BaseNetwork):
         parser.add_argument(
             '--resnet_n_downsample',
             type=int,
-            default=4,
+            default=2,
             help='number of downsampling layers in netG')
         parser.add_argument(
             '--resnet_n_blocks',
@@ -30,9 +30,7 @@ class Pix2PixHDGenerator(BaseNetwork):
 
     def __init__(self, opt):
         super().__init__()
-        input_nc = opt.label_nc + \
-            (1 if opt.contain_dontcare_label else 0) + \
-            (0 if opt.no_instance else 1)
+        input_nc = 1
         norm_layer = get_nonspade_norm_layer(opt, opt.norm_G)
         activation = nn.ReLU(False)
 

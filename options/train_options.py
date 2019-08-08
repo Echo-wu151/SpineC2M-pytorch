@@ -80,11 +80,6 @@ class TrainOptions(BaseOptions):
             type=int,
             default=1,
             help='number of discriminator iterations per generator iterations.')
-        parser.add_argument(
-            '--alpha',
-            type=float,
-            default=0.1,
-            help='beta distribution parameter of mixup')
 
         # for discriminators
         parser.add_argument(
@@ -93,19 +88,10 @@ class TrainOptions(BaseOptions):
             default=64,
             help='# of discrim filters in first conv layer')
         parser.add_argument(
-            '--lambda_feat',
-            type=float,
-            default=10.0,
-            help='weight for feature matching loss')
-        parser.add_argument(
             '--lambda_vgg',
             type=float,
             default=10.0,
             help='weight for vgg loss')
-        parser.add_argument(
-            '--no_ganFeat_loss',
-            action='store_true',
-            help='if specified, do *not* use discriminator feature matching loss')
         parser.add_argument(
             '--no_vgg_loss',
             action='store_true',
@@ -120,15 +106,7 @@ class TrainOptions(BaseOptions):
             type=str,
             default='relu',
             help='(pool|relu|2254)')
-        parser.add_argument(
-            '--no_style_loss',
-            action='store_true',
-            help='if specified, do *not* use VGG style loss')
-        parser.add_argument(
-            '--lambda_style',
-            type=float,
-            default=120.0,
-            help='weight for style loss')
+
         parser.add_argument(
             '--lambda_gan',
             type=float,
@@ -137,13 +115,12 @@ class TrainOptions(BaseOptions):
         parser.add_argument(
             '--netD',
             type=str,
-            default='multiscale',
-            help='(n_layers|multiscale|image)')
+            default='hybrid',
+            help='(hybrid)')
         parser.add_argument(
             '--no_TTUR',
             action='store_true',
             help='Use TTUR training scheme')
-        parser.add_argument('--lambda_kld', type=float, default=0.05)
 
         parser.add_argument(
             '--lambda_L1',
@@ -151,27 +128,11 @@ class TrainOptions(BaseOptions):
             default=1.0,
             help='weight for L1 loss')
         parser.add_argument(
-            '--plus_L1_loss',
+            '--no_L1_loss',
             action='store_true',
-            help='if specified, do use L1 reconstruction loss')
-        parser.add_argument(
-            '--lambda_L2',
-            type=float,
-            default=1.0,
-            help='weight for L2 loss')
-        parser.add_argument(
-            '--plus_L2_loss',
-            action='store_true',
-            help='if specified, do use L2 reconstruction loss')
-        parser.add_argument(
-            '--lambda_TV',
-            type=float,
-            default=1.0,
-            help='weight for TV loss')
-        parser.add_argument(
-            '--plus_TV_loss',
-            action='store_true',
-            help='if specified, do use TV loss')
+            help='if specified, do not use L1 reconstruction loss')
+
+
         parser.add_argument(
             '--lambda_MI',
             type=float,
@@ -181,15 +142,7 @@ class TrainOptions(BaseOptions):
             '--plus_MI_loss',
             action='store_true',
             help='if specified, do use Mutual information loss')
-        parser.add_argument(
-            '--lambda_BCE',
-            type=float,
-            default=1.0,
-            help='weight for BCE loss')
-        parser.add_argument(
-            '--plus_BCE_loss',
-            action='store_true',
-            help='if specified, do use BCE loss')
+
         parser.add_argument(
             '--target_real_label',
             type=float,

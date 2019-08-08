@@ -26,7 +26,7 @@ class TestOptions(BaseOptions):
             help='how many test images to run')
 
         parser.set_defaults(
-            preprocess_mode='scale_width_and_crop',
+            preprocess_mode='scale_and_crop',
             crop_size=512,
             load_size=512,
             display_winsize=256)
