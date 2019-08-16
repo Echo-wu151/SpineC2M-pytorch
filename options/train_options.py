@@ -31,10 +31,6 @@ class TrainOptions(BaseOptions):
             action='store_true',
             help='do not save intermediate training results to [opt.checkpoints_dir]/[opt.name]/web/')
         parser.add_argument(
-            '--debug',
-            action='store_true',
-            help='only do one epoch and displays at each iteration')
-        parser.add_argument(
             '--tf_log',
             action='store_true',
             help='if specified, use tensorboard logging. Requires tensorflow installed')
@@ -131,17 +127,6 @@ class TrainOptions(BaseOptions):
             '--no_L1_loss',
             action='store_true',
             help='if specified, do not use L1 reconstruction loss')
-
-
-        parser.add_argument(
-            '--lambda_MI',
-            type=float,
-            default=0.1,
-            help='weight for Mutual information loss')
-        parser.add_argument(
-            '--plus_MI_loss',
-            action='store_true',
-            help='if specified, do use Mutual information loss')
 
         parser.add_argument(
             '--target_real_label',

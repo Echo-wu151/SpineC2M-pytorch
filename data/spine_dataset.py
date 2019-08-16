@@ -1,5 +1,5 @@
 
-from data.base_dataset import get_params, get_transform, get_transforms_4_dcm
+from data.base_dataset import get_transforms
 from data.pix2pix_dataset import Pix2pixDataset
 from data.image_folder import make_dataset
 from pydicom import dcmread
@@ -8,7 +8,7 @@ import torch
 import numpy as np
 
 
-class AngioDataset(Pix2pixDataset):
+class SpineDataset(Pix2pixDataset):
     """ Dataset that loads images from directories
         Use option --label_dir, --image_dir, --instance_dir to specify the directories.
         The images in the directories are sorted in alphabetical order and paired in order.

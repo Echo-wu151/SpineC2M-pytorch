@@ -1,14 +1,12 @@
-from models.networks.sync_batchnorm import DataParallelWithCallback
 from models.model import Model
-
+from torch.nn import DataParallel
 
 class Trainer():
     def __init__(self, opt):
         self.opt = opt
         self.model = Model(opt)
         if len(opt.gpu_ids) > 0:
-            self.model = DataParallelWithCallback(self.model,
-                                                          device_ids=opt.gpu_ids)
+            self.model = DataParallel(self.model, device_ids=opt.gpu_ids)
             self.model_on_one_gpu = self.model.module
         else:
             self.model_on_one_gpu = self.model
@@ -53,10 +51,6 @@ class Trainer():
 
     def save(self, epoch):
         self.model_on_one_gpu.save(epoch)
-
-    ##################################################################
-    # Helper functions
-    ##################################################################
 
     def update_learning_rate(self, epoch):
         if epoch > self.opt.niter:

@@ -32,8 +32,6 @@ class Model(torch.nn.Module):
                 self.criterionSSIM = networks.SSIMLoss()
             if not opt.no_GradientDifferenceLoss:
                 self.criterionGDL = networks.GradientDifferenceLoss()
-            if not opt.no_Histogram_loss:
-                self.criterionMI = networks.HistogramLoss()
             if not opt.no_cycle_loss:
                 self.criterionCYC = torch.nn.L1Loss()
 
@@ -84,9 +82,6 @@ class Model(torch.nn.Module):
         util.save_network(self.netG_for_MR, 'G_for_MR', epoch, self.opt)
         util.save_network(self.netD_unaligned, 'D_unaligned', epoch, self.opt)
 
-    ##########################################################################
-    # Private helper methods
-    ##########################################################################
 
     def initialize_networks(self, opt):
         netG_for_CT = networks.define_G(opt)
@@ -169,10 +164,8 @@ class Model(torch.nn.Module):
         D_losses['D_alignedReal'] = self.criterionGAN(aligned_real, True, for_D=True) * self.opt.lambda_gan
         return D_losses
     
-    # Take the prediction of fake and real images from the combined batch
+    
     def divide_preds(self, pred):
-        # the prediction contains the intermediate outputs of multiscale GAN,
-        # so it's usually a list
         if isinstance(pred, list):
             syn, real = [], []
             for p in pred:

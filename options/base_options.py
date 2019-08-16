@@ -1,5 +1,3 @@
-
-
 import sys
 import argparse
 import os
@@ -40,12 +38,12 @@ class BaseOptions():
         parser.add_argument(
             '--norm_G',
             type=str,
-            default='spectralsync_batch',
+            default='spectralinstance',
             help='instance or batch norm')
         parser.add_argument(
             '--norm_D',
             type=str,
-            default='spectralsync_batch',
+            default='spectralinstance',
             help='instance or batch norm')
         parser.add_argument(
             '--phase',
@@ -118,7 +116,7 @@ class BaseOptions():
                             default=(-1, 1), help='normalize images to this range')
         parser.add_argument(
             '--nThreads',
-            default=16,
+            default=8,
             type=int,
             help='# threads for loading data')
         parser.add_argument(
@@ -151,17 +149,12 @@ class BaseOptions():
             '--netG',
             type=str,
             default='pix2pixhd',
-            help='selects model to use for netG (pix2pixhd | )')
+            help='selects model to use for netG (pix2pixhd)')
         parser.add_argument(
             '--ngf',
             type=int,
             default=64,
             help='# of gen filters in first conv layer')
-        parser.add_argument(
-            '--nhidden',
-            type=int,
-            default=128,
-            help='# of spade filters in embedding conv layer')
         parser.add_argument(
             '--init_type',
             type=str,

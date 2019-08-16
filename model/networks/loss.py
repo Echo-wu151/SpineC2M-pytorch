@@ -2,7 +2,7 @@ from scipy import ndimage
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models.networks.vgg import VGG19
+from models.networks.vgg import VGG19relu
 import numpy as np
 
 
@@ -88,98 +88,27 @@ class GANLoss(nn.Module):
                 loss += new_loss
             return loss / len(tensorlist)
         return self.loss(tensorlist, target_is_real, for_D)
-    
-    
-    def calc_gradient_penalty(self, netD, real_data, fake_data):
-        alpha = torch.rand(BATCH_SIZE, 1)
-        alpha = alpha.expand(real_data.size())
-        alpha = alpha.cuda() if use_cuda else alpha
-
-        interpolates = alpha * real_data + ((1 - alpha) * fake_data)
-
-        if use_cuda:
-            interpolates = interpolates.cuda()
-        interpolates = autograd.Variable(interpolates, requires_grad=True)
-
-        disc_interpolates = netD(interpolates)
-
-        gradients = autograd.grad(outputs=disc_interpolates, inputs=interpolates,
-                                  grad_outputs=torch.ones(disc_interpolates.size()).cuda() if use_cuda else torch.ones(
-                                      disc_interpolates.size()),
-                                  create_graph=True, retain_graph=True, only_inputs=True)[0]
-
-        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean() * LAMBDA
-        return gradient_penalty
-
 
 
 class VGGLoss(nn.Module):
     """
     Perceptual loss that uses a pretrained VGG network
     """
-    def __init__(self, gpu_ids, vgg_mode='pool'):
+    def __init__(self, gpu_ids):
         super(VGGLoss, self).__init__()
-        self.vgg_mode = vgg_mode
         self.criterion = nn.L1Loss()
-        self.vgg = VGG19().cuda(gpu_ids[0])
+        self.vgg = VGG19relu().cuda(gpu_ids[0])
         self.opt = opt
-        if vgg_mode == 'pool':
-            self.weights = [1.0] * 3
-        else:
-            self.weights = [1.0 / 32, 1.0 / 16, 1.0 / 8, 1.0 / 4, 1.0]
+        self.weights = [1.0 / 32, 1.0 / 16, 1.0 / 8, 1.0 / 4, 1.0]
 
     def forward(self, x, y):
         x_vgg, y_vgg = self.vgg(x), self.vgg(y)
         loss = 0
         for i, (x_ft, y_ft) in enumerate(zip(x_vgg, y_vgg)):
             loss += self.weights[i] * self.criterion(x_ft, y_ft.detach())
-            if not self.opt.no_style_loss:
-                x_gram, y_gram = self.gram_matrix(x_ft), self.gram_matrix(y_ft)
-                loss += self.opt.lambda_style * self.weights[i] * self.criterion(x_gram, y_gram.detach())
         return loss
-    
-    def gram_matrix(self, input):
-        a, b, c, d = input.size()  
-        feats = input.view(a * b, c * d)
-        G = torch.mm(feats, feats.t()) 
-
-        return G.div(a * b * c * d)
 
 
-class HistogramLoss(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.gaugram = GaussianHistogram(bins=1500, min=-1,max=1,sigma=1)
-    def forward(self, x, y):
-        assert x.size() == y.size(), "input x and y should be same dim"
-        bsize = x.size(0)
-        pxy = []
-        for i in range(bsize):
-            xi = x[i]
-            yi = y[i]
-            xi = self.gaugram(xi.view(-1))[:, None].float()
-            yi = self.gaugram(yi.view(-1))[None, :].float()
-            gaugram = torch.mm(xi, yi)
-            pxy.append(gaugram / gaugram.sum())
-        pxy = torch.stack(pxy, dim=0)
-        joint_hgram = pxy
-        return joint_hgram
-    
-class GaussianHistogram(nn.Module):
-    def __init__(self, bins, min, max, sigma):
-        super(GaussianHistogram, self).__init__()
-        self.bins = bins
-        self.min = min
-        self.max = max
-        self.sigma = sigma
-        self.delta = float(max - min) / float(bins)
-        self.centers = float(min) + self.delta * (torch.arange(bins).float() + 0.5)
-
-    def forward(self, x):
-        x = torch.unsqueeze(x, 0) - torch.unsqueeze(self.centers, 1).cuda()
-        x = torch.exp(-0.5*(x/self.sigma)**2) / (self.sigma * np.sqrt(np.pi*2)) * self.delta
-        x = x.sum(dim=1)
-        return x
     
 class GradientDifferenceLoss(nn.Module):
     def forward(self, preds, target):
