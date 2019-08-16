@@ -15,8 +15,8 @@ print(' '.join(sys.argv))
 dataloader = data.create_dataloader(opt)
 
 # create trainer for our model
-trainer1 = Trainer(opt)
-trainer2 = Trainer(opt)
+trainer = Trainer(opt)
+
 
 # create tool for counting iterations
 iter_counter = IterationCounter(opt, len(dataloader))
@@ -29,7 +29,7 @@ for epoch in iter_counter.training_epochs():
     for i, data in enumerate(dataloader, start=iter_counter.epoch_iter):
 
         iter_counter.record_one_iter()
-        trainer.g_losses, trainer.d_losser = {}, {}
+        trainer.g_losses, trainer.d_losses = {}, {}
         CT, MR = data['CT'].squeeze(1), data['MR'].squeeze(1)
         
         if opt.D_steps_per_G:
